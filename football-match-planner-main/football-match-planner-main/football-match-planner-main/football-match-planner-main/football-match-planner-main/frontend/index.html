@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football Match Planner — Quản lý Tổ chức Trận đấu</title>
+  <meta name="description" content="Nền tảng quản lý tổ chức trận đấu bóng đá với Kanban Board, Tree View, User ID và phân tích hiệu suất thành viên." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ══════════════════════ SIDEBAR ══════════════════════ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <span class="logo-icon">⚽</span>
+        <div>
+          <div class="logo-title">Match Planner</div>
+          <div class="logo-sub">Football Manager Pro</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Profile Bar -->
+    <div class="user-bar" style="justify-content: center; padding: 15px; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+      <div id="currentUserDisplay" style="font-weight: 600; color: var(--accent-purple); font-size: 14px;">Chưa đăng nhập</div>
+      <div id="currentUserRole" style="font-size: 11px; color: var(--text-muted);"></div>
+      <button id="btnLogout" class="btn-cancel" style="margin-top: 8px; font-size: 11px; padding: 4px 8px; display: none;">Đăng xuất</button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">TRẬN ĐẤU</div>
+      <ul class="match-list" id="matchList">
+        <li class="match-item-skeleton"></li>
+        <li class="match-item-skeleton"></li>
+        <li class="match-item-skeleton"></li>
+      </ul>
+    </div>
+
+    <div class="sidebar-footer">
+      <button class="btn-create-match" id="btnCreateMatch">
+        <span>＋</span> Tạo trận mới
+      </button>
+      <button class="btn-create-match" id="btnMembers" style="margin-top:8px;background:rgba(139,92,246,0.1);border-color:rgba(139,92,246,0.3);color:var(--accent-purple);">
+        <span>👥</span> Quản lý thành viên
+      </button>
+    </div>
+  </aside>
+
+  <!-- ══════════════════════ MAIN CONTENT ══════════════════════ -->
+  <main class="main-content">
+
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+        <div class="match-title-wrapper">
+          <h1 class="match-title" id="matchTitleHeader">Chọn một trận đấu để bắt đầu</h1>
+          <div class="match-subheader">
+            <div class="match-date" id="matchDateHeader"></div>
+            <select class="match-status-select" id="matchStatusHeader" style="display:none;" disabled>
+              <option value="Planned">📅 Sắp tới</option>
+              <option value="In Progress">⚡ Đang diễn ra</option>
+              <option value="Done">✅ Hoàn thành</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <!-- Global Progress (hidden in topbar, shown in progress-row below) -->
+        <!-- API Response Badge -->
+        <div class="api-badge" id="apiBadge" style="display:none">
+          <span class="api-badge-label">MongoDB Query</span>
+          <span class="api-badge-value" id="apiResponseTime">—</span>
+          <span class="api-badge-unit">ms</span>
+          <div class="api-badge-tooltip">1 query duy nhất kéo toàn bộ JSON<br>vs SQL cần nhiều JOIN</div>
+        </div>
+        <button class="btn-analytics" id="btnAnalytics" style="display:none">📊 Phân tích</button>
+        <button class="btn-logs"      id="btnLogs"      style="display:none">🕐 Lịch sử</button>
+        <button class="btn-delete-match" id="btnDeleteMatch" style="display:none" title="Xoá trận đấu">🗑️</button>
+      </div>
+    </header>
+
+    <!-- Global Progress Bar Row (below header) -->
+    <div class="progress-row" id="progressRow" style="display:none">
+      <div class="progress-row-track">
+        <div class="progress-row-fill" id="progressRowFill" style="width:0%"></div>
+      </div>
+      <span class="progress-row-label" id="progressRowLabel">0 / 0 tasks hoàn thành (0%)</span>
+    </div>
+
+    <!-- Empty State -->
+    <div class="empty-state" id="emptyState">
+      <div class="empty-icon">⚽</div>
+      <h2>Chưa có trận đấu nào được chọn</h2>
+      <p>Chọn một trận đấu từ danh sách bên trái hoặc tạo mới để bắt đầu quản lý</p>
+    </div>
+
+    <!-- 3-Column Editor -->
+    <div class="editor-layout" id="editorLayout" style="display:none">
+
+      <!-- CỘT TRÁI: Tree View -->
+      <section class="col-tree" id="colTree">
+        <div class="col-header">
+          <span class="col-icon">🗂️</span>
+          <span class="col-title">Cây Phân Cấp</span>
+        </div>
+        <div class="tree-container" id="treeContainer">
+          <!-- Rendered by JS -->
+        </div>
+      </section>
+
+      <!-- CỘT GIỮA: Kanban Board -->
+      <section class="col-kanban" id="colKanban">
+        <div class="col-header">
+          <span class="col-icon">📋</span>
+          <span class="col-title">Kanban Board</span>
+          <span class="col-subtitle" id="kanbanSubtitle">Tất cả công việc</span>
+        </div>
+        <div class="kanban-board" id="kanbanBoard">
+          <div class="kanban-col" id="kanban-Todo" data-status="Todo">
+            <div class="kanban-col-header todo">
+              <span class="kanban-col-icon">📌</span>
+              <span>Cần làm</span>
+              <span class="kanban-count" id="count-Todo">0</span>
+            </div>
+            <div class="kanban-cards" id="cards-Todo"></div>
+          </div>
+          <div class="kanban-col" id="kanban-InProgress" data-status="In Progress">
+            <div class="kanban-col-header inprogress">
+              <span class="kanban-col-icon">⚡</span>
+              <span>Đang xử lý</span>
+              <span class="kanban-count" id="count-InProgress">0</span>
+            </div>
+            <div class="kanban-cards" id="cards-InProgress"></div>
+          </div>
+          <div class="kanban-col" id="kanban-Done" data-status="Done">
+            <div class="kanban-col-header done">
+              <span class="kanban-col-icon">✅</span>
+              <span>Đã xong</span>
+              <span class="kanban-count" id="count-Done">0</span>
+            </div>
+            <div class="kanban-cards" id="cards-Done"></div>
+          </div>
+          <div class="kanban-col" id="kanban-Incomplete" data-status="Incomplete">
+            <div class="kanban-col-header incomplete">
+              <span class="kanban-col-icon">❌</span>
+              <span>Không hoàn thành</span>
+              <span class="kanban-count" id="count-Incomplete">0</span>
+            </div>
+            <div class="kanban-cards" id="cards-Incomplete"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CỘT PHẢI: Detail Form -->
+      <section class="col-detail" id="colDetail">
+        <div class="col-header">
+          <span class="col-icon">📝</span>
+          <span class="col-title">Chi tiết</span>
+        </div>
+        <div class="detail-form" id="detailForm">
+          <div class="detail-placeholder">
+            <span>👆</span>
+            <p>Chọn một nhiệm vụ để xem chi tiết</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- ══════════════════════ MODALS ══════════════════════ -->
+
+  <!-- Analytics Modal -->
+  <div class="modal-overlay" id="analyticsModal">
+    <div class="modal-box modal-analytics">
+      <div class="modal-header">
+        <h2>📊 Bảng Xếp Hạng Hiệu Suất</h2>
+        <button class="modal-close" id="closeAnalytics">✕</button>
+      </div>
+      <div class="modal-body" id="analyticsBody">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logs Modal -->
+  <div class="modal-overlay" id="logsModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>🕐 Lịch Sử Hoạt Động</h2>
+        <button class="modal-close" id="closeLogs">✕</button>
+      </div>
+      <div class="modal-body" id="logsBody">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Match Modal -->
+  <div class="modal-overlay" id="createMatchModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>⚽ Tạo Trận Đấu Mới</h2>
+        <button class="modal-close" id="closeCreateMatch">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="createMatchForm">
+          <div class="form-group">
+            <label class="form-label">Tên trận đấu</label>
+            <input type="text" class="form-input" id="newMatchName" placeholder="VD: FC Lão Tướng vs FC Sinh Viên" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">⏰ Giờ bắt đầu</label>
+            <input type="datetime-local" class="form-input" id="newMatchDate" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">🏁 Giờ kết thúc</label>
+            <input type="datetime-local" class="form-input" id="newMatchDateEnd" required />
+          </div>
+          <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5;">
+            💡 Trạng thái trận đấu sẽ <strong>tự động chuyển</strong> dựa trên thời gian:<br>
+            📅 <strong>Sắp tới</strong> (trước giờ bắt đầu) → ⚡ <strong>Đang diễn ra</strong> (đến giờ bắt đầu) → ✅ <strong>Hoàn thành</strong> (đến giờ kết thúc)<br>
+            ❌ Các công việc chưa xong sẽ tự động chuyển sang <strong>Không hoàn thành</strong>
+          </p>
+
+          <button type="submit" class="btn-submit">Tạo trận ⚽</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Confirm Modal -->
+  <div class="modal-overlay" id="deleteConfirmModal">
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header">
+        <h2>🗑️ Xác nhận xoá trận</h2>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--text-secondary);margin-bottom:20px">Bạn có chắc chắn muốn xoá trận đấu này? Hành động này <strong style="color:var(--accent-red)">không thể hoàn tác</strong>.</p>
+        <div style="display:flex;gap:10px">
+          <button class="btn-submit btn-danger" id="confirmDeleteBtn">🗑️ Xoá vĩnh viễn</button>
+          <button class="btn-cancel" id="cancelDeleteBtn">Huỷ</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Members Management Modal -->
+  <div class="modal-overlay" id="membersModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>👥 Quản lý thành viên</h2>
+        <button class="modal-close" id="closeMembers">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="addMemberForm" style="display:flex; flex-wrap: wrap; gap:10px; margin-bottom:20px;">
+          <input type="text" id="newMemberName" class="form-input" placeholder="Tên hiển thị" required style="flex:1; min-width: 120px;" />
+          <input type="text" id="newMemberUsername" class="form-input" placeholder="Tên đăng nhập" required style="flex:1; min-width: 120px;" />
+          <input type="password" id="newMemberPassword" class="form-input" placeholder="Mật khẩu" required style="flex:1; min-width: 100px;" />
+          <select id="newMemberRole" class="form-select" style="flex:1; min-width: 90px;">
+            <option value="Member">Member</option>
+            <option value="Admin">Admin</option>
+          </select>
+          <button type="submit" class="btn-submit" style="width:auto;padding:0 15px;">Thêm</button>
+        </form>
+        <div class="members-list" id="membersList">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Login Modal (forced overlay) -->
+  <div class="modal-overlay" id="loginModal">
+    <div class="modal-box modal-box-sm">
+      <div class="modal-header" style="justify-content: center;">
+        <h2>🔐 Đăng nhập</h2>
+      </div>
+      <div class="modal-body">
+        <form id="loginForm">
+          <div class="form-group">
+            <label class="form-label">Tên đăng nhập (Username)</label>
+            <input type="text" class="form-input" id="loginUsername" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mật khẩu (Password)</label>
+            <input type="password" class="form-input" id="loginPassword" required />
+          </div>
+          <button type="submit" class="btn-submit">Đăng nhập</button>
+          <p style="text-align: center; font-size: 12px; color: var(--text-muted); margin-top: 15px;">Mặc định ban đầu nếu chưa có user: <b>admin / admin</b></p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script src="js/api.js?v=2"></script>
+  <script src="js/tree.js?v=2"></script>
+  <script src="js/kanban.js?v=2"></script>
+  <script src="js/detail.js?v=2"></script>
+  <script src="js/analytics.js?v=2"></script>
+  <script src="js/app.js?v=2"></script>
+</body>
+</html>
