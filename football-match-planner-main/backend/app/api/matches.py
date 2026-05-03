@@ -1,7 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session, joinedload
 from datetime import datetime, timedelta
 import time
+import uuid
 from db.database import get_matches_collection
+from db.postgres import get_pg_db
+from models.user_pg import MatchPg, CategoryPg, TaskPg, SubtaskPg, ActivityLogPg
 from models.schemas import UpdateTaskRequest, MatchCreate, UpdateMatchStatusRequest, UpdateTreeRequest
 
 router = APIRouter()
@@ -73,6 +77,57 @@ DEFAULT_CATEGORIES = [
 ]
 
 
+def _sync_match_to_pg(match_mongo: dict, db: Session):
+    match_id = str(match_mongo["_id"])
+    existing = db.query(MatchPg).filter(MatchPg.id == match_id).first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+
+    pg_match = MatchPg(
+        id=match_id,
+        name=match_mongo.get("name", ""),
+        date=match_mongo.get("date", ""),
+        date_end=match_mongo.get("date_end", ""),
+        status=match_mongo.get("status", ""),
+        created_at=match_mongo.get("created_at", "")
+    )
+    db.add(pg_match)
+
+    for cat in match_mongo.get("categories", []):
+        cat_id = f"cat_{uuid.uuid4().hex[:8]}"
+        pg_cat = CategoryPg(id=cat_id, match_id=match_id, name=cat.get("name", ""))
+        db.add(pg_cat)
+        
+        for task in cat.get("tasks", []):
+            task_id = f"task_{uuid.uuid4().hex[:8]}"
+            pg_task = TaskPg(
+                id=task_id, category_id=cat_id, name=task.get("name", ""),
+                status=task.get("status", ""), task_type=task.get("task_type", ""),
+                location=task.get("location"), cost=task.get("cost"),
+                assigned_to=task.get("assigned_to"), assignee_id=task.get("assignee_id")
+            )
+            db.add(pg_task)
+            
+            for sub in task.get("subtasks", []):
+                sub_id = f"sub_{uuid.uuid4().hex[:8]}"
+                pg_sub = SubtaskPg(
+                    id=sub_id, task_id=task_id, name=sub.get("name", ""),
+                    cost=sub.get("cost"), status=sub.get("status", "")
+                )
+                db.add(pg_sub)
+                
+    for log in match_mongo.get("activity_logs", []):
+        log_id = f"log_{uuid.uuid4().hex[:8]}"
+        pg_log = ActivityLogPg(
+            id=log_id, match_id=match_id, action=log.get("action", ""),
+            timestamp=log.get("timestamp", ""), actor=log.get("actor", "")
+        )
+        db.add(pg_log)
+        
+    db.commit()
+
+
 # ─────────────────────────────────────────────────────────────
 # GET /match  — Lấy danh sách tất cả trận đấu (summary)
 # ─────────────────────────────────────────────────────────────
@@ -92,12 +147,32 @@ def list_matches():
 # GET /match/{match_id}  — 1 query duy nhất lấy toàn bộ JSON
 # ─────────────────────────────────────────────────────────────
 @router.get("/{match_id}")
-def get_match(match_id: str):
-    start_time = time.time()
+def get_match(match_id: str, db: Session = Depends(get_pg_db)):
+    # --- MONGODB ---
+    start_time_mongo = time.time()
 
     match = matches_collection.find_one({"_id": match_id})
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
+        
+    mongo_time_ms = round((time.time() - start_time_mongo) * 1000, 2)
+    
+    # Sync to PG if needed
+    _sync_match_to_pg(match, db)
+
+    # --- POSTGRESQL ---
+    start_time_pg = time.time()
+    match_pg = db.query(MatchPg).options(
+        joinedload(MatchPg.categories).joinedload(CategoryPg.tasks).joinedload(TaskPg.subtasks)
+    ).filter(MatchPg.id == match_id).first()
+    
+    if match_pg:
+        # Simulate accessing data to force load if not already loaded by joinedload
+        for c in match_pg.categories:
+            for t in c.tasks:
+                for s in t.subtasks:
+                    pass
+    pg_time_ms = round((time.time() - start_time_pg) * 1000, 2)
 
     match["id"] = str(match["_id"])
     # Auto-update status based on datetime
@@ -105,12 +180,11 @@ def get_match(match_id: str):
     _auto_update_match_status(match, now)
     del match["_id"]
 
-    response_time_ms = round((time.time() - start_time) * 1000, 2)
-
     return {
         "data": match,
         "metadata": {
-            "response_time_ms": response_time_ms,
+            "response_time_ms": mongo_time_ms,
+            "pg_response_time_ms": pg_time_ms,
             "query_count": 1,
             "message": "Fetched entire nested document with 1 single MongoDB query"
         }

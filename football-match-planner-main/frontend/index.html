@@ -71,11 +71,18 @@
       <div class="topbar-right">
         <!-- Global Progress (hidden in topbar, shown in progress-row below) -->
         <!-- API Response Badge -->
-        <div class="api-badge" id="apiBadge" style="display:none">
-          <span class="api-badge-label">MongoDB Query</span>
+        <div class="api-badge" id="apiBadge" style="display:none; background: rgba(77, 184, 61, 0.1); border-color: rgba(77, 184, 61, 0.3); color: #4DB33D; margin-right: 10px;">
+          <span class="api-badge-label">MongoDB</span>
           <span class="api-badge-value" id="apiResponseTime">—</span>
           <span class="api-badge-unit">ms</span>
-          <div class="api-badge-tooltip">1 query duy nhất kéo toàn bộ JSON<br>vs SQL cần nhiều JOIN</div>
+          <div class="api-badge-tooltip">1 query duy nhất kéo toàn bộ JSON</div>
+        </div>
+        
+        <div class="api-badge" id="apiBadgePg" style="display:none; background: rgba(51, 103, 145, 0.1); border-color: rgba(51, 103, 145, 0.3); color: #336791;">
+          <span class="api-badge-label">PostgreSQL</span>
+          <span class="api-badge-value" id="apiResponseTimePg">—</span>
+          <span class="api-badge-unit">ms</span>
+          <div class="api-badge-tooltip">SQL cần nhiều JOIN để lấy toàn bộ dữ liệu</div>
         </div>
         <button class="btn-analytics" id="btnAnalytics" style="display:none">📊 Phân tích</button>
         <button class="btn-logs"      id="btnLogs"      style="display:none">🕐 Lịch sử</button>
@@ -253,6 +260,10 @@
     <div class="modal-box">
       <div class="modal-header">
         <h2>👥 Quản lý thành viên</h2>
+        <div style="display:flex; gap:10px; margin-left:auto; margin-right: 15px;">
+           <span id="memberMongoTime" style="font-size:11px; padding: 4px 8px; background: rgba(77, 184, 61, 0.1); color: #4DB33D; border-radius: 4px; border: 1px solid rgba(77, 184, 61, 0.3);">Mongo: — ms</span>
+           <span id="memberPgTime" style="font-size:11px; padding: 4px 8px; background: rgba(51, 103, 145, 0.1); color: #336791; border-radius: 4px; border: 1px solid rgba(51, 103, 145, 0.3);">PG: — ms</span>
+        </div>
         <button class="modal-close" id="closeMembers">✕</button>
       </div>
       <div class="modal-body">

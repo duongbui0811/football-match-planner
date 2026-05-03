@@ -83,6 +83,16 @@ const App = (() => {
     try {
       const res = await API.getMembers();
       _membersList = res.data || [];
+      
+      const mTime = document.getElementById('memberMongoTime');
+      const pTime = document.getElementById('memberPgTime');
+      if (mTime && res.metadata && res.metadata.mongo_response_time_ms !== undefined) {
+        mTime.textContent = 'Mongo: ' + res.metadata.mongo_response_time_ms + ' ms';
+      }
+      if (pTime && res.metadata && res.metadata.pg_response_time_ms !== undefined) {
+        pTime.textContent = 'PG: ' + res.metadata.pg_response_time_ms + ' ms';
+      }
+      
       renderMembersList();
     } catch (err) {
       console.error(err);
@@ -216,13 +226,26 @@ const App = (() => {
 
       // API Badge and Admin Tools
       const badge = document.getElementById('apiBadge');
+      const badgePg = document.getElementById('apiBadgePg');
       if (isAdmin) {
           badge.style.display = 'flex';
+          badgePg.style.display = 'flex';
           const timeEl = document.getElementById('apiResponseTime');
+          const timeElPg = document.getElementById('apiResponseTimePg');
           timeEl.textContent = res.metadata.response_time_ms;
+          if (res.metadata.pg_response_time_ms !== undefined) {
+              timeElPg.textContent = res.metadata.pg_response_time_ms;
+          } else {
+              timeElPg.textContent = '—';
+          }
           timeEl.style.transform = 'scale(1.3)';
+          timeElPg.style.transform = 'scale(1.3)';
           timeEl.style.color = '#fff';
-          setTimeout(() => { timeEl.style.transform = ''; timeEl.style.color = ''; }, 300);
+          timeElPg.style.color = '#fff';
+          setTimeout(() => { 
+              timeEl.style.transform = ''; timeEl.style.color = ''; 
+              timeElPg.style.transform = ''; timeElPg.style.color = ''; 
+          }, 300);
           
           document.getElementById('btnAnalytics').style.display = '';
           document.getElementById('btnLogs').style.display = '';
@@ -231,6 +254,7 @@ const App = (() => {
           document.getElementById('btnDeleteMatch').style.display = isDone ? 'none' : '';
       } else {
           badge.style.display = 'none';
+          badgePg.style.display = 'none';
           document.getElementById('btnAnalytics').style.display = 'none';
           document.getElementById('btnLogs').style.display = 'none';
           document.getElementById('btnDeleteMatch').style.display = 'none';
@@ -516,6 +540,7 @@ const App = (() => {
       document.getElementById('btnAnalytics').style.display = 'none';
       document.getElementById('btnLogs').style.display = 'none';
       document.getElementById('apiBadge').style.display = 'none';
+      document.getElementById('apiBadgePg').style.display = 'none';
       const bar = document.getElementById('globalProgressBar');
       if (bar) { bar.style.width = '0%'; }
       document.getElementById('deleteConfirmModal').classList.remove('open');

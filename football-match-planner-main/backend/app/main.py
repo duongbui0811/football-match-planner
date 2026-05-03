@@ -4,6 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from api import matches, members
+from db.postgres import engine, Base
+import models.user_pg  # Import to register models
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Football Match Planner API",
