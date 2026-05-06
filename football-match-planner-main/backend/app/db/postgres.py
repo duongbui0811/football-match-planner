@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-PG_URI = "postgresql://postgres:postgres@localhost:5432/football_planner"
+PG_URI = "postgresql://postgres:1@localhost:5432/football_planner"
 
 engine = create_engine(PG_URI, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
