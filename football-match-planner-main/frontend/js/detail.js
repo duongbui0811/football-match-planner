@@ -30,6 +30,7 @@ const Detail = (() => {
     const isIncomplete = task.status === 'Incomplete';
     const isDone = task.status === 'Done';
     const isUnassigned = !task.assigned_to && !task.assignee_id;
+    const canAssign = isAdmin && !isMatchLocked && !isIncomplete && !isDone;
     const canEditStatus = !isMatchLocked && !isIncomplete && !isDone && !isUnassigned && (isAdmin || isAssignee);
     const canAddSubtask = canEditStatus && !isDone;
 
@@ -78,7 +79,7 @@ const Detail = (() => {
         ${canAddSubtask ? `
         <div style="display:flex; gap:8px; margin-top:8px;">
           <input type="text" id="newSubtaskName" class="form-input" placeholder="Tên subtask mới..." style="flex:1;">
-          <input type="number" id="newSubtaskCost" class="form-input" placeholder="Chi phí ($)" style="width:100px;">
+          <input type="number" id="newSubtaskCost" class="form-input" placeholder="Chi phí ($)" style="width:100px;" min="0">
           <button type="button" class="btn-submit" id="btnAddSubtask" style="width:auto; padding:6px 12px; font-size:12px;">+ Thêm</button>
         </div>
         ` : (isDone ? `<div style="color:var(--accent-green); font-size:12px; margin-top:8px; padding: 8px 10px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); border-radius: 8px;">✅ Nhiệm vụ đã hoàn thành — không thể thêm sub-task mới.</div>` : '')}
@@ -87,11 +88,11 @@ const Detail = (() => {
       ${isMatchLocked ? `<div style="color:var(--accent-red); font-size:12px; margin-top:10px; padding: 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px;">🔒 Trận đấu đã bắt đầu hoặc kết thúc, không thể thay đổi thông tin nhiệm vụ.</div>` : 
       isIncomplete ? `<div style="color:var(--accent-red); font-size:12px; margin-top:10px; padding: 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px;">❌ Nhiệm vụ này không hoàn thành — Trận đấu đã diễn ra mà task chưa được hoàn tất.</div>` : 
       isDone ? `<div style="color:var(--accent-green); font-size:12px; margin-top:10px; padding: 10px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); border-radius: 8px;">✅ Nhiệm vụ đã hoàn thành.</div>` :
-      isUnassigned ? `<div style="color:var(--accent-yellow); font-size:12px; margin-top:10px; padding: 10px; background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2); border-radius: 8px;">⚠️ Vui lòng phân công người phụ trách trước khi thay đổi trạng thái.</div>` :
+      (isUnassigned && canAssign) ? `<div style="color:var(--accent-yellow); font-size:12px; margin-top:10px; padding: 10px; background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2); border-radius: 8px;">⚠️ Vui lòng phân công người phụ trách trước khi thay đổi trạng thái.</div><button class="btn-submit" id="detailSaveBtn" style="margin-top:10px;">💾 Lưu phân công</button>` :
       canEditStatus ? `<button class="btn-submit" id="detailSaveBtn">💾 Lưu thay đổi</button>` : `<div style="color:var(--accent-red); font-size:12px; margin-top:10px;">⚠️ Bạn chỉ có thể cập nhật trạng thái nếu nhiệm vụ được giao cho bạn.</div>`}
     `;
 
-    if (canEditStatus) {
+    if (canEditStatus || (isUnassigned && canAssign)) {
       const btnAddSubtask = document.getElementById('btnAddSubtask');
       if (btnAddSubtask) {
         btnAddSubtask.addEventListener('click', () => {
@@ -99,6 +100,10 @@ const Detail = (() => {
           const costEl = document.getElementById('newSubtaskCost');
           const name = nameEl.value.trim();
           const cost = costEl.value !== '' ? parseFloat(costEl.value) : null;
+          if (cost !== null && cost < 0) {
+            App.showToast('❌ Chi phí không được là số âm!', 'error');
+            return;
+          }
           if (name) {
             task.subtasks = task.subtasks || [];
             task.subtasks.push({ name: name, cost: cost, status: 'Todo' });
@@ -165,7 +170,7 @@ const Detail = (() => {
                 </div>
                 <div class="form-group">
                   <label class="form-label">Chi phí ($)</label>
-                  <input type="number" id="editSubtaskCost" class="form-input" value="${currentCost}">
+                  <input type="number" id="editSubtaskCost" class="form-input" value="${currentCost}" min="0">
                 </div>
               </div>
               <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
@@ -182,6 +187,10 @@ const Detail = (() => {
           document.getElementById('btnConfirmEditSubtask').onclick = () => {
             const newName = document.getElementById('editSubtaskName').value.trim();
             const newCost = parseFloat(document.getElementById('editSubtaskCost').value) || 0;
+            if (newCost < 0) {
+              App.showToast('❌ Chi phí không được là số âm!', 'error');
+              return;
+            }
             if (newName) {
               task.subtasks[idx].name = newName;
               task.subtasks[idx].cost = newCost;
