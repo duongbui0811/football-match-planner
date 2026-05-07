@@ -5,7 +5,19 @@ const Detail = (() => {
     const form = document.getElementById('detailForm');
     const isLogistics = catName && (catName.includes('Hậu cần') || catName.includes('Tài chính'));
 
-    const statusOpts = ['Todo', 'In Progress', 'Done', 'Incomplete'].map(s =>
+    // Build allowed status options based on current task status
+    let allowedStatuses = [];
+    if (task.status === 'Done') {
+      // Done tasks are locked — no changes allowed
+      allowedStatuses = ['Done'];
+    } else if (task.status === 'Incomplete') {
+      // Incomplete is auto-managed, no changes allowed
+      allowedStatuses = ['Incomplete'];
+    } else {
+      // Normal flow: Todo → In Progress → Done (no Incomplete option)
+      allowedStatuses = ['Todo', 'In Progress', 'Done'];
+    }
+    const statusOpts = allowedStatuses.map(s =>
       `<option value="${s}" ${task.status === s ? 'selected' : ''}>${s === 'Todo' ? 'Cần làm' : s === 'In Progress' ? 'Đang xử lý' : s === 'Done' ? 'Đã xong' : 'Không hoàn thành'}</option>`
     ).join('');
 
@@ -16,10 +28,13 @@ const Detail = (() => {
     const isAdmin = currentUser && currentUser.role === 'Admin';
     const isAssignee = currentUser && (task.assignee_id === currentUser.id || task.assigned_to === currentUser.name);
     const isIncomplete = task.status === 'Incomplete';
-    const canEditStatus = !isMatchLocked && !isIncomplete && (isAdmin || isAssignee);
+    const isDone = task.status === 'Done';
+    const isUnassigned = !task.assigned_to && !task.assignee_id;
+    const canEditStatus = !isMatchLocked && !isIncomplete && !isDone && !isUnassigned && (isAdmin || isAssignee);
+    const canAddSubtask = canEditStatus && !isDone;
 
     const subtasksHtml = buildSubtasksHtml(task.subtasks || [], canEditStatus);
-    const extraFields = isLogistics ? buildLogisticsFields(task, isAdmin && !isMatchLocked) : '';
+    const extraFields = buildLogisticsFields(task, isAdmin && !isMatchLocked);
 
     const typeMap = { logistics: '🚚 Hậu cần', personal: '👤 Cá nhân', general: '📋 Chung' };
     const typeBadge = typeMap[task.task_type] || '📋 Chung';
@@ -60,17 +75,19 @@ const Detail = (() => {
       <div class="form-group">
         <label class="form-label">Sub-tasks & Biên lai</label>
         <div class="subtask-list" id="subtaskList">${subtasksHtml}</div>
-        ${canEditStatus ? `
+        ${canAddSubtask ? `
         <div style="display:flex; gap:8px; margin-top:8px;">
           <input type="text" id="newSubtaskName" class="form-input" placeholder="Tên subtask mới..." style="flex:1;">
           <input type="number" id="newSubtaskCost" class="form-input" placeholder="Chi phí ($)" style="width:100px;">
           <button type="button" class="btn-submit" id="btnAddSubtask" style="width:auto; padding:6px 12px; font-size:12px;">+ Thêm</button>
         </div>
-        ` : ''}
+        ` : (isDone ? `<div style="color:var(--accent-green); font-size:12px; margin-top:8px; padding: 8px 10px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); border-radius: 8px;">✅ Nhiệm vụ đã hoàn thành — không thể thêm sub-task mới.</div>` : '')}
       </div>
 
       ${isMatchLocked ? `<div style="color:var(--accent-red); font-size:12px; margin-top:10px; padding: 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px;">🔒 Trận đấu đã bắt đầu hoặc kết thúc, không thể thay đổi thông tin nhiệm vụ.</div>` : 
       isIncomplete ? `<div style="color:var(--accent-red); font-size:12px; margin-top:10px; padding: 10px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px;">❌ Nhiệm vụ này không hoàn thành — Trận đấu đã diễn ra mà task chưa được hoàn tất.</div>` : 
+      isDone ? `<div style="color:var(--accent-green); font-size:12px; margin-top:10px; padding: 10px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); border-radius: 8px;">✅ Nhiệm vụ đã hoàn thành.</div>` :
+      isUnassigned ? `<div style="color:var(--accent-yellow); font-size:12px; margin-top:10px; padding: 10px; background: rgba(234,179,8,0.08); border: 1px solid rgba(234,179,8,0.2); border-radius: 8px;">⚠️ Vui lòng phân công người phụ trách trước khi thay đổi trạng thái.</div>` :
       canEditStatus ? `<button class="btn-submit" id="detailSaveBtn">💾 Lưu thay đổi</button>` : `<div style="color:var(--accent-red); font-size:12px; margin-top:10px;">⚠️ Bạn chỉ có thể cập nhật trạng thái nếu nhiệm vụ được giao cho bạn.</div>`}
     `;
 
@@ -206,6 +223,15 @@ const Detail = (() => {
 
         App.saveTaskDetail(task, catName, {
           status: newStatus, assigned_to: newAssignee, assignee_id: newAssigneeId, cost: newCost, location: newLocation, subtasks: updatedSubtasks
+        }).then(() => {
+          // Re-render detail panel to reflect the new state immediately
+          task.status = newStatus;
+          task.assigned_to = newAssignee;
+          task.assignee_id = newAssigneeId;
+          if (newCost !== null) task.cost = newCost;
+          if (newLocation !== null) task.location = newLocation;
+          task.subtasks = updatedSubtasks;
+          Detail.render(task, catName);
         });
       });
     }
@@ -302,8 +328,8 @@ const Detail = (() => {
   }
 
   function buildLogisticsFields(task, isAdmin) {
-    const cost = typeof task.cost === 'number' ? task.cost :
-      (task.subtasks || []).filter(s => typeof s.cost === 'number').reduce((acc, s) => acc + s.cost, 0);
+    // Always auto-calculate cost from subtask costs
+    const cost = (task.subtasks || []).filter(s => typeof s.cost === 'number' && s.cost !== null).reduce((acc, s) => acc + s.cost, 0);
     const locationVal = task.location || '';
     const mapQuery = encodeURIComponent(locationVal || 'Hà Nội');
 
@@ -319,8 +345,8 @@ const Detail = (() => {
 
     return `
       <div class="form-group">
-        <label class="form-label">💰 Chi phí ước tính (USD $)</label>
-        <input type="number" class="form-input" value="${cost}" placeholder="VD: 150" id="detailCost" min="0" step="0.01" ${isAdmin ? '' : 'readonly'} />
+        <label class="form-label">💰 Tổng chi phí (USD $) <span style="font-size:11px; color:var(--text-muted); font-weight:normal;">— tự tính từ sub-tasks</span></label>
+        <input type="number" class="form-input" value="${cost}" id="detailCost" readonly style="background: rgba(255,255,255,0.03); cursor: default;" />
       </div>
       ${locationHtml}
     `;

@@ -92,6 +92,26 @@ const Kanban = (() => {
           return;
         }
 
+        // Don't allow dragging FROM Done to any other column
+        if (oldStatus === 'Done') {
+          App.showToast('❌ Task đã hoàn thành không thể di chuyển!', 'error');
+          return;
+        }
+
+        // Don't allow dragging unassigned tasks
+        let isUnassigned = false;
+        _matchData.categories.forEach(cat => {
+          if (cat.name === categoryName) {
+            (cat.tasks || []).forEach(t => {
+              if (t.name === taskName && !t.assigned_to && !t.assignee_id) isUnassigned = true;
+            });
+          }
+        });
+        if (isUnassigned) {
+          App.showToast('❌ Vui lòng phân công người phụ trách trước khi chuyển trạng thái!', 'error');
+          return;
+        }
+
         if (newStatus === 'Done') {
           let hasIncompleteSubtasks = false;
           _matchData.categories.forEach(cat => {
@@ -133,10 +153,12 @@ const Kanban = (() => {
     const isAdmin = currentUser && currentUser.role === 'Admin';
     const isAssignee = currentUser && (task.assignee_id === currentUser.id || task.assigned_to === currentUser.name);
     const isIncomplete = task.status === 'Incomplete';
+    const isDone = task.status === 'Done';
+    const isUnassigned = !task.assigned_to && !task.assignee_id;
     const isMatchLocked = _matchData && (_matchData.status === 'In Progress' || _matchData.status === 'Done');
 
-    card.className = 'kanban-card' + (isIncomplete ? ' card-incomplete' : '');
-    card.draggable = !isIncomplete && !isMatchLocked && (isAdmin || isAssignee);
+    card.className = 'kanban-card' + (isIncomplete ? ' card-incomplete' : '') + (isDone ? ' card-done' : '') + (isUnassigned ? ' card-unassigned' : '');
+    card.draggable = !isIncomplete && !isDone && !isUnassigned && !isMatchLocked && (isAdmin || isAssignee);
     card.dataset.taskName = task.name;
     card.dataset.status = task.status;
 
